@@ -1,4 +1,4 @@
-package it.polimi.middleware.spark.batch.bank;
+package it.polimi.middleware.spark.lab.bank;
 
 import static org.apache.spark.sql.functions.max;
 
@@ -23,11 +23,12 @@ import org.apache.spark.sql.types.StructType;
  * Q2. Print the person with the maximum total amount of withdrawals
  * Q3. Print all the accounts with a negative balance
  *
- * The code exemplifies the use of SQL primitives.  By setting the useCache variable,
+ * The code exemplifies the use of SQL primitives. By setting the useCache
+ * variable,
  * one can see the differences when enabling/disabling cache.
  */
 public class Bank {
-    private static final boolean useCache = true;
+        private static final boolean useCache = true;
 
     public static void main(String[] args) {
         final String master = args.length > 0 ? args[0] : "local[4]";
@@ -52,7 +53,7 @@ public class Bank {
                 .option("header", "false")
                 .option("delimiter", ",")
                 .schema(mySchema)
-                .csv(filePath + "files/bank/deposits.csv");
+                .csv(filePath + "lab_files/bank/deposits.csv");
 
         final Dataset<Row> withdrawals = spark
                 .read()
@@ -94,13 +95,13 @@ public class Bank {
 
         // Q3 Accounts with negative balance
 
-        final Dataset<Row> totWithdrawals = withdrawals
+        Dataset<Row> totWithdrawals = withdrawals
                 .groupBy("account")
                 .sum("amount")
                 .drop("person")
                 .as("totalWithdrawals");
 
-        final Dataset<Row> totDeposits = deposits
+        Dataset<Row> totDeposits = deposits
                 .groupBy("account")
                 .sum("amount")
                 .drop("person")
@@ -112,9 +113,35 @@ public class Bank {
                                 (totWithdrawals.col("sum(amount)").gt(totDeposits.col("sum(amount)")))
                 ).select(totWithdrawals.col("account"));
 
+        if (useCache) {
+                totWithdrawals.cache();
+                totDeposits.cache();
+        }
+
         negativeAccounts.show();
 
-        spark.close();
+        // Q4 Print all accounts in descending order of balance 
+        
+        totDeposits = totDeposits.withColumnRenamed("sum(amount)", "totalDeposits");
+        totWithdrawals = totWithdrawals.withColumnRenamed("sum(amount)", "totalWithdrawals");
 
+        Dataset<Row> totalBalanceAccounts = totWithdrawals
+                .join(totDeposits, totDeposits.col("account").equalTo(totWithdrawals.col("account")), "full_outer")
+                .select("*");
+        
+        totalBalanceAccounts = totalBalanceAccounts.na().fill(0);
+
+        if (useCache) {
+                totalBalanceAccounts.cache();
+        }
+
+        Dataset<Row> totalRes = totalBalanceAccounts
+                .withColumn("total", (totalBalanceAccounts.col("totalDeposits"))
+                .minus((totalBalanceAccounts.col("totalWithdrawals"))));
+        totalRes = totalRes.orderBy(totalRes.col("total").desc());
+
+        totalRes.show();
+
+        spark.close();
     }
 }
