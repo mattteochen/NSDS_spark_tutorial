@@ -33,17 +33,43 @@ public class FriendsCarlo {
 
         final List<StructField> fields = new ArrayList<>();
         fields.add(DataTypes.createStructField("person", DataTypes.StringType, false));
-        fields.add(DataTypes.createStructField("friend", DataTypes.StringType, false));
+        fields.add(DataTypes.createStructField("friendJoin", DataTypes.StringType, false));
         final StructType schema = DataTypes.createStructType(fields);
 
-        final Dataset<Row> input = spark
+        Dataset<Row> people = spark
                 .read()
                 .option("header", "false")
                 .option("delimiter", ",")
                 .schema(schema)
-                .csv(filePath + "files/friends/friends.csv");
+                .csv(filePath + "lab_files/friends/friends.csv");
 
-        // TODO
+        people.show();
+
+        final List<StructField> fieldsFriends = new ArrayList<>();
+        fieldsFriends.add(DataTypes.createStructField("friendJoin", DataTypes.StringType, false));
+        fieldsFriends.add(DataTypes.createStructField("friend", DataTypes.StringType, false));
+        final StructType schemaFriends = DataTypes.createStructType(fieldsFriends);
+
+        Dataset<Row> friends = spark
+                .read()
+                .option("header", "false")
+                .option("delimiter", ",")
+                .schema(schemaFriends)
+                .csv(filePath + "lab_files/friends/friends.csv");
+
+        while (true) {
+            Dataset<Row> newPeople = people.union(
+                    people
+                            .join(friends, friends.col("friendJoin").equalTo(people.col("friendJoin")))
+                            .select("person", "friend")
+                            .withColumnRenamed("friend", "friendJoin")
+            )
+                    .distinct()
+                    .orderBy("person", "friendJoin");
+            newPeople.show();
+            if (newPeople.count() == people.count()) break;
+            else people = newPeople;
+        }
 
         spark.close();
     }
