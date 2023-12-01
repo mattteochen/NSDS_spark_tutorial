@@ -42,23 +42,49 @@ public class Cities {
                 .option("header", "true")
                 .option("delimiter", ";")
                 .schema(citiesPopulationSchema)
-                .csv(filePath + "files/cities/cities_population.csv");
+                .csv(filePath + "lab_files/cities/cities_population.csv");
 
         final Dataset<Row> citiesRegions = spark
                 .read()
                 .option("header", "true")
                 .option("delimiter", ";")
                 .schema(citiesRegionsSchema)
-                .csv(filePath + "files/cities/cities_regions.csv");
+                .csv(filePath + "lab_files/cities/cities_regions.csv");
 
         // TODO: add code here if necessary
 
-        final Dataset<Row> q1 = null; // TODO: query Q1
+        final Dataset<Row> q1 = 
+            citiesPopulation
+            .join(citiesRegions, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
+            .groupBy("region")
+            .sum("population");
+
 
         q1.show();
 
-        final Dataset<Row> q2 = null; // TODO: query Q2
+        final Dataset<Row> q2MaxPopulatedCityPerRegion = 
+            citiesPopulation
+            .join(citiesRegions, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
+            .groupBy("region")
+            .max("population").as("maxPopulated")
+            .select("*");
 
+        q2MaxPopulatedCityPerRegion.show();
+
+        final Dataset<Row> q2CountCitiesPerRegion = 
+            citiesPopulation
+            .join(citiesRegions, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
+            .groupBy("region")
+            .count().as("numCities")
+            .select("*");
+
+        q2CountCitiesPerRegion.show();
+
+        final Dataset<Row> q2 = 
+            q2MaxPopulatedCityPerRegion
+            .join(q2CountCitiesPerRegion, q2MaxPopulatedCityPerRegion.col("region").equalTo(q2CountCitiesPerRegion.col("region")))
+            .select(q2MaxPopulatedCityPerRegion.col("region"), q2MaxPopulatedCityPerRegion.col("max(population)"), q2CountCitiesPerRegion.col("count"));
+        
         q2.show();
 
         // JavaRDD where each element is an integer and represents the population of a city
