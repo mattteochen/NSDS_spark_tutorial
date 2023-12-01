@@ -3,6 +3,8 @@ package it.polimi.middleware.spark.lab.enrichment;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.streaming.StreamingQuery;
+import org.apache.spark.sql.streaming.StreamingQueryException;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
@@ -10,6 +12,9 @@ import org.apache.spark.sql.types.StructType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+
+import static org.apache.spark.sql.functions.col;
+import static org.apache.spark.sql.functions.window;
 
 /**
  * This code snippet exemplifies a typical scenario in event processing: merging
@@ -54,7 +59,23 @@ public class EventEnrichment {
                 .schema(productClassificationSchema)
                 .csv(filePath + "files/enrichment/product_classification.csv");
 
-        // TODO
+        final StreamingQuery query = inStream
+                .join(productsClassification, inStream.col("value").equalTo(productsClassification.col("product")))
+                .groupBy(
+                        window(col("timestamp"), "30 seconds", "10 seconds"),
+                        col("classification")
+                )
+                .count()
+                .writeStream()
+                .outputMode("Complete")
+                .format("console")
+                .start();
+
+        try {
+            query.awaitTermination();
+        } catch (final StreamingQueryException e) {
+            e.printStackTrace();
+        }
 
         spark.close();
     }
