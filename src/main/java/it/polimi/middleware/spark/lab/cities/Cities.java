@@ -13,6 +13,7 @@ import org.apache.spark.sql.types.StructType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import static org.apache.spark.sql.functions.*;
 
 public class Cities {
     public static void main(String[] args) throws TimeoutException {
@@ -51,39 +52,25 @@ public class Cities {
                 .schema(citiesRegionsSchema)
                 .csv(filePath + "lab_files/cities/cities_regions.csv");
 
-        // TODO: add code here if necessary
+        final Dataset<Row> joinedData = citiesPopulation
+                .join(citiesRegions, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
+                .select(citiesPopulation.col("id"), citiesRegions.col("region"), citiesPopulation.col("city"), citiesPopulation.col("population"))
+                .sort("region");
+
+        joinedData.cache();
+        joinedData.show();
 
         final Dataset<Row> q1 =
-            citiesPopulation
-            .join(citiesRegions, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
+            joinedData
             .groupBy("region")
             .sum("population");
 
 
         q1.show();
 
-        final Dataset<Row> q2MaxPopulatedCityPerRegion =
-            citiesPopulation
-            .join(citiesRegions, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
-            .groupBy("region")
-            .max("population").as("maxPopulated")
-            .select("*");
-
-        q2MaxPopulatedCityPerRegion.show();
-
-        final Dataset<Row> q2CountCitiesPerRegion =
-            citiesPopulation
-            .join(citiesRegions, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
-            .groupBy("region")
-            .count().as("numCities")
-            .select("*");
-
-        q2CountCitiesPerRegion.show();
-
-        final Dataset<Row> q2 =
-            q2MaxPopulatedCityPerRegion
-            .join(q2CountCitiesPerRegion, q2MaxPopulatedCityPerRegion.col("region").equalTo(q2CountCitiesPerRegion.col("region")))
-            .select(q2MaxPopulatedCityPerRegion.col("region"), q2MaxPopulatedCityPerRegion.col("max(population)"), q2CountCitiesPerRegion.col("count"));
+        final Dataset<Row> q2 = joinedData
+                .groupBy("region")
+                .agg(count("city"), max("population"));
 
         q2.show();
 
