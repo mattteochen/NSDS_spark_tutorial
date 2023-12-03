@@ -44,7 +44,7 @@ public class Cities {
                 .option("header", "true")
                 .option("delimiter", ";")
                 .schema(citiesPopulationSchema)
-                .csv(filePath + "files/cities/cities_population.csv");
+                .csv(filePath + "lab_files/cities/cities_population.csv");
 
         citiesPopulation.cache();
 
@@ -53,7 +53,7 @@ public class Cities {
                 .option("header", "true")
                 .option("delimiter", ";")
                 .schema(citiesRegionsSchema)
-                .csv(filePath + "files/cities/cities_regions.csv");
+                .csv(filePath + "lab_files/cities/cities_regions.csv");
 
         final Dataset<Row> joinedDataset = citiesRegions
                 .join(citiesPopulation, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
