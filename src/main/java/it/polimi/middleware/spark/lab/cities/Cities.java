@@ -45,6 +45,8 @@ public class Cities {
                 .schema(citiesPopulationSchema)
                 .csv(filePath + "lab_files/cities/cities_population.csv");
 
+        citiesPopulation.cache();
+
         final Dataset<Row> citiesRegions = spark
                 .read()
                 .option("header", "true")
@@ -76,7 +78,24 @@ public class Cities {
 
         // JavaRDD where each element is an integer and represents the population of a city
         JavaRDD<Integer> population = citiesPopulation.toJavaRDD().map(r -> r.getInt(2));
-        // TODO: add code here to produce the output for query Q3
+
+        var oldPopulation = population;
+        population.cache();
+
+        int populationSum = population.reduce(Integer::sum);
+        int year = 0;
+        while (populationSum < 100000000) {
+            population = population
+                    .map(p -> p > 1000? (int) (((float) p)*(1.01)) : (int)(((float) p)*(0.99)));
+            population.cache();
+
+            populationSum = population.reduce(Integer::sum);
+            System.out.printf("Year: %d, total population: %d\n", year, populationSum);
+            year++;
+
+            oldPopulation.unpersist();
+            oldPopulation = population;
+        }
 
         // Bookings: the value represents the city of the booking
         final Dataset<Row> bookings = spark
