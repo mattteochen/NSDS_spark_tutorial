@@ -104,7 +104,18 @@ public class Cities {
                 .option("rowsPerSecond", 100)
                 .load();
 
-        final StreamingQuery q4 = null; // TODO query Q4
+        final StreamingQuery q4 = bookings
+                .join(joinedData, bookings.col("value").equalTo(joinedData.col("id")))
+                .drop("population", "value")
+                .groupBy(
+                        window(col("timestamp"), "30 seconds", "5 seconds"),
+                        col("region")
+                )
+                .sum()
+                .writeStream()
+                .outputMode("Update")
+                .format("console")
+                .start();
 
         try {
             q4.awaitTermination();
