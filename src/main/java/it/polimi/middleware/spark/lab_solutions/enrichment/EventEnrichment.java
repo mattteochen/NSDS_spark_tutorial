@@ -1,4 +1,4 @@
-package it.polimi.middleware.spark.lab.enrichment;
+package it.polimi.middleware.spark.lab_solutions.enrichment;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -62,12 +62,12 @@ public class EventEnrichment {
         final StreamingQuery query = inStream
                 .join(productsClassification, inStream.col("value").equalTo(productsClassification.col("product")))
                 .groupBy(
-                        window(col("timestamp"), "30 seconds", "10 seconds"),
-                        col("classification")
+                        col("classification"),
+                        window(col("timestamp"), "30 seconds", "10 seconds")
                 )
                 .count()
                 .writeStream()
-                .outputMode("Complete")
+                .outputMode("update")
                 .format("console")
                 .start();
 

@@ -1,4 +1,4 @@
-package it.polimi.middleware.spark.lab.cities;
+package it.polimi.middleware.spark.lab_solutions.cities;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
@@ -13,6 +13,8 @@ import org.apache.spark.sql.types.StructType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+
+import static org.apache.spark.sql.functions.*;
 
 public class Cities {
     public static void main(String[] args) throws TimeoutException {
@@ -42,54 +44,51 @@ public class Cities {
                 .option("header", "true")
                 .option("delimiter", ";")
                 .schema(citiesPopulationSchema)
-                .csv(filePath + "lab_files/cities/cities_population.csv");
+                .csv(filePath + "files/cities/cities_population.csv");
+
+        citiesPopulation.cache();
 
         final Dataset<Row> citiesRegions = spark
                 .read()
                 .option("header", "true")
                 .option("delimiter", ";")
                 .schema(citiesRegionsSchema)
-                .csv(filePath + "lab_files/cities/cities_regions.csv");
+                .csv(filePath + "files/cities/cities_regions.csv");
 
-        // TODO: add code here if necessary
+        final Dataset<Row> joinedDataset = citiesRegions
+                .join(citiesPopulation, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
+                .select(citiesPopulation.col("id"),
+                        citiesPopulation.col("city"),
+                        citiesRegions.col("region"),
+                        citiesPopulation.col("population"));
 
-        final Dataset<Row> q1 =
-            citiesPopulation
-            .join(citiesRegions, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
-            .groupBy("region")
-            .sum("population");
+        joinedDataset.cache();
 
+        final Dataset<Row> q1 = joinedDataset
+                .groupBy("region")
+                .sum("population")
+                .sort(desc("sum(population)"));
 
         q1.show();
 
-        final Dataset<Row> q2MaxPopulatedCityPerRegion =
-            citiesPopulation
-            .join(citiesRegions, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
-            .groupBy("region")
-            .max("population").as("maxPopulated")
-            .select("*");
-
-        q2MaxPopulatedCityPerRegion.show();
-
-        final Dataset<Row> q2CountCitiesPerRegion =
-            citiesPopulation
-            .join(citiesRegions, citiesRegions.col("city").equalTo(citiesPopulation.col("city")))
-            .groupBy("region")
-            .count().as("numCities")
-            .select("*");
-
-        q2CountCitiesPerRegion.show();
-
-        final Dataset<Row> q2 =
-            q2MaxPopulatedCityPerRegion
-            .join(q2CountCitiesPerRegion, q2MaxPopulatedCityPerRegion.col("region").equalTo(q2CountCitiesPerRegion.col("region")))
-            .select(q2MaxPopulatedCityPerRegion.col("region"), q2MaxPopulatedCityPerRegion.col("max(population)"), q2CountCitiesPerRegion.col("count"));
+        final Dataset<Row> q2 = joinedDataset
+                .groupBy("region")
+                .agg(count("city"), max("population"));
 
         q2.show();
 
-        // JavaRDD where each element is an integer and represents the population of a city
         JavaRDD<Integer> population = citiesPopulation.toJavaRDD().map(r -> r.getInt(2));
-        // TODO: add code here to produce the output for query Q3
+        population.cache();
+        long count  = population.reduce((a, b) -> a+b);
+
+        int year = 0;
+        while (count < 100 * 1000 * 1000) {
+            year++;
+            population = population.map(p -> p > 1000 ? p+(int)(p*0.01) : p-(int)(p*0.1));
+            population.cache();
+            count = count  = population.reduce((a, b) -> a+b);
+            System.out.println("Year: " + year + ", count: " + count);
+        }
 
         // Bookings: the value represents the city of the booking
         final Dataset<Row> bookings = spark
@@ -98,7 +97,20 @@ public class Cities {
                 .option("rowsPerSecond", 100)
                 .load();
 
-        final StreamingQuery q4 = null; // TODO query Q4
+        final StreamingQuery q4 = bookings
+                .join(
+                        joinedDataset,
+                        bookings.col("value").equalTo(joinedDataset.col("id")))
+                .drop("population", "value")
+                .groupBy(
+                        window(col("timestamp"), "30 seconds", "5 seconds"),
+                        col("region")
+                )
+                .sum()
+                .writeStream()
+                .outputMode("update")
+                .format("console")
+                .start();
 
         try {
             q4.awaitTermination();
